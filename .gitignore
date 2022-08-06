@@ -1,2 +1,12 @@
 # gitignore mp4 files
-*.mp4
+media/*.mp4
+media/*.MOV
+media/*.mov
+media/*.avi
+media/*.AVI
+media/*.wmv
+media/*.WMV
+media/*.flv
+media/*.FLV
+media/*.m4v
+media/*.M4V

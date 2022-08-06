@@ -1,12 +1,12 @@
 import cv2
-import numpy as np
+from webcamstream import WebcamVideoStream, FPS
 
 from orb_detector import ORBTracker
 from track import HungarianTracker
 
 
 class VideoCap:
-    def __init__(self, video_path=None, refresh_timeout: int = 500, is_direct: bool = False):
+    def __init__(self, video_path=0, refresh_timeout: int = 500, is_direct: bool = False):
         """
         Creates a VideoCap object with the given video path.
         :param video_path:
@@ -15,10 +15,14 @@ class VideoCap:
         self.tracker = None
         self.fgbg = None
         self.refresh_timeout = refresh_timeout
-        self.vs = cv2.VideoCapture(video_path) if video_path is not None else cv2.VideoCapture(0)
+        self.vs = cv2.VideoCapture(video_path, cv2.CAP_ANY) \
+            if isinstance(video_path, int) else cv2.VideoCapture(video_path) # using cv2.CAP_DSHOW for directshow camera
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.fps = FPS().start()
         self.n_frames = 0
         self.current_frame = 0
-        self.total_frames = int(self.vs.get(cv2.CAP_PROP_FRAME_COUNT)) if video_path is not None else -1
+        #self.total_frames = int(self.vs.get(cv2.CAP_PROP_FRAME_COUNT)) if video_path is not None else -1
         self.is_direct = is_direct
 
     def setup_background_subtraction(self):
@@ -38,20 +42,20 @@ class VideoCap:
         :return:
         """
         self.current_frame += 1
-        if 0 < self.total_frames <= self.current_frame:
-            self.current_frame = 0
-            self.vs.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        # if 0 < self.total_frames <= self.current_frame:
+        #     self.current_frame = 0
+        #     self.vs.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
         ret, frame = self.vs.read()
         if not ret:
             raise Exception("couldn't grab image frame")
-
+        self.fps.update()
         if self.is_direct:
             return frame
         ret, jpg = cv2.imencode(".jpg", frame)
         return jpg.tobytes()
 
-    def draw_orb_tracks(self, frame):
+    def draw_orb_tracks(self, frame, draw_kp: bool = True, draw_detections: bool = False, draw_tracks: bool = True, draw_numbers: bool = True):
         """
         Draws the ORB tracks on the given frame.
         :param frame:
@@ -59,10 +63,10 @@ class VideoCap:
         """
         if self.tracker is None:
             return frame
-        self.tracker.draw_tracks(frame, draw_kp=True, draw_detections=False)
+        self.tracker.draw_tracks(frame, draw_kp, draw_detections, draw_tracks, draw_numbers)
         return frame
 
-    def get_orb_tracking(self):
+    def get_orb_tracking(self, draw_kp: bool = True, draw_detections: bool = False, draw_tracks: bool = True, draw_numbers: bool = True):
         """
         Returns the current frame with the ORB tracks drawn on it.
         :return:
@@ -70,10 +74,11 @@ class VideoCap:
         ret, frame = self.vs.read()
         if not ret:
             raise Exception("couldn't grab image frame")
+        self.fps.update()
         if self.tracker is None:
-            self.tracker = ORBTracker()
+            self.tracker = ORBTracker(heatmap_size=15)
         self.tracker.track(frame)
-        frame = self.draw_orb_tracks(frame)
+        frame = self.draw_orb_tracks(frame, draw_kp, draw_detections, draw_tracks, draw_numbers)
 
         if self.is_direct:
             return frame
@@ -87,12 +92,13 @@ class VideoCap:
         """
 
         self.current_frame += 1
-        if 0 < self.total_frames <= self.current_frame:
-            self.current_frame = 0
-            self.vs.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        # if 0 < self.total_frames <= self.current_frame:
+        #     self.current_frame = 0
+        #     self.vs.set(cv2.CAP_PROP_POS_FRAMES, 0)
         ret, frame = self.vs.read()
         if not ret:
             raise Exception("couldn't grab image frame")
+        self.fps.update()
         if self.fgbg is None:
             self.setup_background_subtraction()
         fgmask = self.fgbg.apply(frame)

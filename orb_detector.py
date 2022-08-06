@@ -6,15 +6,15 @@ from track import HungarianTracker
 
 class ORBDetector:
     def __init__(self, prune_bg: bool = True, refresh_bg_frame: int = 10, heatmap_size: int = 10,
-                 heatmap_threshold: int = 10):
+                 min_hits: int = 3, min_detection_area: int = 50, max_detection_area: int = 5000):
         """
         Creates a ORBDetector object. prune_bg determines whether to prune the background keypoints and descriptors.
         refresh_bg_frame determines how often to refresh the background keypoints and descriptors.
         heatmap_size determines the size of the heatmap. heatmap_threshold determines the threshold for the heatmap.
-        :param prune_bg:
-        :param refresh_bg_frame:
-        :param heatmap_size:
-        :param heatmap_threshold:
+        :param prune_bg: Whether to prune the background keypoints and descriptors.
+        :param refresh_bg_frame: the number of frames after which to refresh the background keypoints and descriptors.
+        :param heatmap_size: size of the heatmap
+        :param min_hits: minimum number of hits to be considered a detection.
         """
         self.orb = cv2.ORB_create()
         self.bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -27,7 +27,9 @@ class ORBDetector:
         self.n_frames = 0
         self.refresh_bg_frames = refresh_bg_frame
         self.heatmap_size = heatmap_size
-        self.heatmap_threshold = heatmap_threshold
+        self.min_hits = min_hits
+        self.min_detection_area = min_detection_area
+        self.max_detection_area = max_detection_area
 
     def get_frame_keypoints(self):
         """
@@ -106,8 +108,13 @@ class ORBDetector:
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
             area = cv2.contourArea(contour)
-            if area > self.heatmap_threshold:
+            # write area to heatmap
+            #cv2.putText(heatmap, str(area), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            #print(area, self.min_detection_area, self.max_detection_area, end="\r\n")
+            if self.max_detection_area > area > self.min_detection_area:
+                cv2.drawContours(heatmap, [contour], -1, (255, 255, 255), 2)
                 detections.append(np.array([x + w // 2, y + h // 2, w, h]))
+        cv2.imshow('contour', heatmap)
         return detections
 
     def _create_heatmap(self, image):
@@ -119,15 +126,14 @@ class ORBDetector:
         heatmap = np.zeros(image.shape[:2], np.uint8)
         for kp in self.kp_frame:
             x, y = int(kp.pt[0]), int(kp.pt[1])
-            heatmap[y - self.heatmap_size:y + self.heatmap_size,
-            x - self.heatmap_size:x + self.heatmap_size] += self.heatmap_threshold // 3
-        heatmap[heatmap < self.heatmap_threshold] = 0
+            heatmap[y - self.heatmap_size:y + self.heatmap_size, x - self.heatmap_size:x + self.heatmap_size] += 1
+        heatmap[heatmap < self.min_hits] = 0
         return heatmap
 
 
 class ORBTracker:
-    def __init__(self, prune_bg: bool = True, refresh_bg_frame: int = 10, heatmap_size: int = 10,
-                 heatmap_threshold: int = 10, min_track_length: int = 5):
+    def __init__(self, prune_bg: bool = True, refresh_bg_frame: int = 10, heatmap_size: int = 20,
+                 min_hits: int = 3, min_track_length: int = 5, min_detection_area: int = 100, max_detection_area: int = 5000, refresh_frame_count: int = 1000):
         """
         Creates a ORBTracker object. prune_bg determines whether to prune the background keypoints and descriptors.
         refresh_bg_frame determines how often to refresh the background keypoints and descriptors.
@@ -137,15 +143,24 @@ class ORBTracker:
         :param prune_bg:
         :param refresh_bg_frame:
         :param heatmap_size:
-        :param heatmap_threshold:
         :param min_track_length:
         """
         self.detections = []
+        self.prune_bg = prune_bg
+        self.refresh_bg_frame = refresh_bg_frame
+        self.heatmap_size = heatmap_size
+        self.min_hits = min_hits
         self.min_track_length = min_track_length
-        self.orb_detector = ORBDetector(prune_bg, refresh_bg_frame, heatmap_size, heatmap_threshold)
+        self.min_detection_area = min_detection_area
+        self.max_detection_area = max_detection_area
+        self.refresh_frame_count = refresh_frame_count
+        self.n_frames = 0
+        self.orb_detector = ORBDetector(prune_bg, refresh_bg_frame, heatmap_size, min_hits=min_hits,
+                                        min_detection_area=min_detection_area, max_detection_area=max_detection_area)
         self.tracker = HungarianTracker(n_history=50)
 
-    def draw_tracks(self, image, draw_kp: bool = True, draw_detections: bool = False):
+    def draw_tracks(self, image, draw_kp: bool = True, draw_detections: bool = True, draw_tracks: bool = True,
+                    draw_numbers: bool = True):
         """
         Draws the tracks on the image.
         :param image:
@@ -157,19 +172,21 @@ class ORBTracker:
         if draw_detections:
             for detection in self.detections:
                 x, y, w, h = detection
-                cv2.rectangle(image, (x-w//2, y-h//2), (x + w//2, y + h//2), (0, 255, 0), 2)
+                cv2.rectangle(image, (x - w // 2, y - h // 2), (x + w // 2, y + h // 2), (0, 255, 0), 2)
 
         for track in self.get_tracks():
             if len(track.tracked_positions) < self.min_track_length:
                 continue
             x, y, w, h = track.tracked_positions[-1].astype(int)
-            cv2.putText(image, str(track.track_id), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.circle(image, (x, y), 5, (0,0,220), -1)
-            l = len(track.tracked_positions)
-            for i in range(l - 1):
-                x1, y1, _, _ = track.tracked_positions[i].astype(int)
-                x2, y2, _, _ = track.tracked_positions[i + 1].astype(int)
-                cv2.line(image, (x1, y1), (x2, y2), (0, 120, 255 - (l - i) * 3), 2)
+            if draw_numbers:
+                cv2.putText(image, str(track.track_id), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            cv2.circle(image, (x, y), 5, (0, 0, 220), -1)
+            if draw_tracks:
+                l = len(track.tracked_positions)
+                for i in range(l - 1):
+                    x1, y1, _, _ = track.tracked_positions[i].astype(int)
+                    x2, y2, _, _ = track.tracked_positions[i + 1].astype(int)
+                    cv2.line(image, (x1, y1), (x2, y2), (0, 120, 255 - (l - i) * 3), 2)
 
         return image
 
@@ -179,8 +196,17 @@ class ORBTracker:
         :param image:
         :return:
         """
+        self.n_frames += 1
+        if self.orb_detector.n_frames % self.refresh_frame_count == 0:
+            self.orb_detector = ORBDetector(self.prune_bg, self.refresh_bg_frame, self.heatmap_size,
+                                            min_hits=self.min_hits,
+                                            min_detection_area=self.min_detection_area,
+                                            max_detection_area=self.max_detection_area)
+            self.tracker = HungarianTracker(n_history=50)
+            self.n_frames = 0
+        print("Tracking frame {}".format(self.n_frames), end="\r")
         self.detections = self.orb_detector.get_detections(image)
-        self.tracker.get_tracks(self.detections, self.orb_detector.n_frames)
+        self.tracker.get_tracks(self.detections, self.n_frames)
         return self.tracker.tracks
 
     def get_tracks(self):
