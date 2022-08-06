@@ -114,7 +114,7 @@ class ORBDetector:
             if self.max_detection_area > area > self.min_detection_area:
                 cv2.drawContours(heatmap, [contour], -1, (255, 255, 255), 2)
                 detections.append(np.array([x + w // 2, y + h // 2, w, h]))
-        cv2.imshow('contour', heatmap)
+
         return detections
 
     def _create_heatmap(self, image):
