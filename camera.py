@@ -6,7 +6,7 @@ from track import HungarianTracker
 
 
 class VideoCap:
-    def __init__(self, video_path=0, refresh_timeout: int = 500, is_direct: bool = False):
+    def __init__(self, video_path=0, refresh_timeout: int = 500, is_direct: bool = False, height: int = 720, width: int = 1280):
         """
         Creates a VideoCap object with the given video path.
         :param video_path:
@@ -17,13 +17,18 @@ class VideoCap:
         self.refresh_timeout = refresh_timeout
         self.vs = cv2.VideoCapture(video_path, cv2.CAP_ANY) \
             if isinstance(video_path, int) else cv2.VideoCapture(video_path) # using cv2.CAP_DSHOW for directshow camera
-        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        if not self.vs.isOpened():
+            raise Exception("Could not open video")
+        self.vs.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.vs.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.fps = FPS().start()
         self.n_frames = 0
         self.current_frame = 0
         #self.total_frames = int(self.vs.get(cv2.CAP_PROP_FRAME_COUNT)) if video_path is not None else -1
         self.is_direct = is_direct
+        #print frame height and width
+        print("Height: ", self.vs.get(cv2.CAP_PROP_FRAME_HEIGHT), "Width: ", self.vs.get(cv2.CAP_PROP_FRAME_WIDTH))
+
 
     def setup_background_subtraction(self):
         """
