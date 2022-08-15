@@ -113,7 +113,7 @@ class ORBDetector:
             #print(area, self.min_detection_area, self.max_detection_area, end="\r\n")
             if self.max_detection_area > area > self.min_detection_area:
                 cv2.drawContours(heatmap, [contour], -1, (255, 255, 255), 2)
-                detections.append(np.array([x + w // 2, y + h // 2, w, h]))
+                detections.append(np.array([x + w // 2, y + h // 2, w, h])) # x, y, w, h
 
         return detections
 
@@ -172,21 +172,21 @@ class ORBTracker:
         if draw_detections:
             for detection in self.detections:
                 x, y, w, h = detection
-                cv2.rectangle(image, (x - w // 2, y - h // 2), (x + w // 2, y + h // 2), (0, 255, 0), 2)
+                cv2.rectangle(image, (x - w // 2, y - h // 2), (x + w // 2, y + h // 2), (0, 255, 0), 1)
 
         for track in self.get_tracks():
             if len(track.tracked_positions) < self.min_track_length:
                 continue
             x, y, w, h = track.tracked_positions[-1].astype(int)
             if draw_numbers:
-                cv2.putText(image, str(track.track_id), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-            cv2.circle(image, (x, y), 5, (0, 0, 220), -1)
+                cv2.putText(image, str(track.track_id), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+            cv2.circle(image, (x, y), 2, (0, 0, 220), -1)
             if draw_tracks:
                 l = len(track.tracked_positions)
                 for i in range(l - 1):
                     x1, y1, _, _ = track.tracked_positions[i].astype(int)
                     x2, y2, _, _ = track.tracked_positions[i + 1].astype(int)
-                    cv2.line(image, (x1, y1), (x2, y2), (0, 120, 255 - (l - i) * 3), 2)
+                    cv2.line(image, (x1, y1), (x2, y2), (0, 120, 255 - (l - i) * 3), 1)
 
         return image
 

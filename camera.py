@@ -26,8 +26,8 @@ class VideoCap:
         self.current_frame = 0
         #self.total_frames = int(self.vs.get(cv2.CAP_PROP_FRAME_COUNT)) if video_path is not None else -1
         self.is_direct = is_direct
-        #print frame height and width
-        print("Height: ", self.vs.get(cv2.CAP_PROP_FRAME_HEIGHT), "Width: ", self.vs.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = height
+        self.width = width
 
 
     def setup_background_subtraction(self):
@@ -78,17 +78,29 @@ class VideoCap:
         """
         ret, frame = self.vs.read()
         if not ret:
-            raise Exception("couldn't grab image frame")
+            raise Exception(f"couldn't grab image frame {self.current_frame}")
+        self.current_frame += 1
         self.fps.update()
         if self.tracker is None:
-            self.tracker = ORBTracker(heatmap_size=15)
+            self.tracker = ORBTracker(heatmap_size=10)
         self.tracker.track(frame)
         frame = self.draw_orb_tracks(frame, draw_kp, draw_detections, draw_tracks, draw_numbers)
-
+        self.write_bboxes_to_yolo_format()
         if self.is_direct:
             return frame
         ret, jpg = cv2.imencode(".jpg", frame)
         return jpg.tobytes()
+
+    def write_bboxes_to_yolo_format(self):
+        """
+        Writes the bounding boxes to a file.
+        :param bboxes:
+        :return:
+        """
+        with open("bboxes.csv", "a+") as f:
+            for bbox in self.tracker.get_detections():
+                f.write(f"{self.current_frame}\t0\t{bbox[0]/self.width}\t{bbox[1]/self.height}\t{bbox[2]/self.width}\t{bbox[3]/self.width}\n")
+
 
     def get_background(self):
         """
